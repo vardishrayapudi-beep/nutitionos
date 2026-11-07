@@ -16,18 +16,55 @@ Apps are created progressively as dependencies appear (see roadmap). Currently:
 |---|---|
 | `apps.common` | Shared abstract model (`TimeStampedUUIDModel`), API error envelope, health check |
 | `apps.accounts` | Custom `User` (email login). Holds no clinic/role data. |
+| `apps.clinics` | `Clinic` - the tenant (one paying customer). |
+| `apps.memberships` | `Membership` (user + clinic + role + status) and ALL tenant plumbing: resolver, permissions, queryset mixin, scoped related field. |
 
-## Multi-tenancy (non-negotiable; implemented from Sprint 1, Day 2)
-Shared tables, every clinic-owned row carries a `clinic` foreign key, strict application-level checks:
+## Multi-tenancy (non-negotiable) - implemented in Sprint 1, Day 2
+Shared tables; every clinic-owned row carries a `clinic` foreign key; strict application-level checks.
 
-1. The active clinic is derived from the authenticated user's **active Membership** - never from a
-   `clinic_id` sent by the client.
-2. Every clinic-owned queryset is filtered by that clinic.
-3. Related objects in write requests are validated to belong to the same clinic.
-4. Cross-clinic access returns 404 (not 403) so existence is not leaked.
-5. Automated cross-clinic tests accompany every clinic-owned endpoint.
+1. The active clinic is derived from the authenticated user's **active Membership in an active
+   Clinic** (`apps/memberships/tenancy.py`) - never from a `clinic_id` sent by the client.
+2. People who work at several clinics choose one with the **`X-Clinic-Id` header**. It is only a
+   *selector*: it is validated against the user's own memberships on every request. A header naming
+   a clinic the user does not belong to is refused - there is no silent fallback.
+3. Every clinic-owned queryset is filtered by that clinic (`ClinicScopedQuerysetMixin`).
+4. Related objects in write requests must belong to the same clinic
+   (`ClinicScopedPrimaryKeyRelatedField`).
+5. Cross-clinic access to an object returns **404** (not 403) so its existence is not revealed. A
+   foreign and a nonexistent clinic id in the header produce byte-identical 403 responses.
+6. Membership is checked on **every request**, so suspending a membership or deactivating a clinic
+   takes effect immediately - even for JWTs that were already issued.
+7. Automated cross-clinic tests accompany every clinic-owned endpoint (`tests/support/api.py ::
+   assert_clinic_isolation`). The suite was mutation-tested: deliberately removing the clinic filter
+   makes it fail.
 
 UUIDs are identifiers, not security controls.
+
+### Recipe: adding a clinic-owned endpoint
+```python
+# models.py  - the model gets a clinic foreign key
+clinic = models.ForeignKey("clinics.Clinic", on_delete=models.PROTECT, related_name="patients")
+
+# serializers.py  - clinic is read-only; relations to other clinic-owned models use the scoped field
+class PrescriptionSerializer(serializers.ModelSerializer):
+    patient = ClinicScopedPrimaryKeyRelatedField(queryset=Patient.objects.all())
+    class Meta:
+        model = Prescription
+        fields = [...]
+        read_only_fields = ["id", "clinic"]
+
+# views.py  - mixin FIRST; add a role permission per action where needed
+class PatientViewSet(ClinicScopedQuerysetMixin, viewsets.ModelViewSet):
+    queryset = Patient.objects.all()
+    serializer_class = PatientSerializer
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [HasActiveClinicMembership()]
+        return [IsClinicAdminOrDoctor()]
+
+# tests  - one call proves isolation
+assert_clinic_isolation(owner_client=..., intruder_client=..., list_url=..., detail_url=..., owned_id=...)
+```
 
 ## Decision log
 
@@ -45,6 +82,14 @@ UUIDs are identifiers, not security controls.
 | 10 | **Explicit `DB_*` variables instead of `DATABASE_URL`** | Passwords with special characters need no URL-escaping. |
 | 11 | **`requirements.txt` (runtime) + `requirements-dev.txt` (tests)**, exact pins | Reproducible installs; small deviation from the master prompt's single file. |
 | 12 | Interactive API docs **off by default**, on in development | Do not advertise the API surface in production unless chosen. |
+| 13 | **Membership is the only source of tenant access**; role and status live on it | One person, several clinics, a different role in each. |
+| 14 | **`X-Clinic-Id` header = validated selector**, not a trusted value | Multi-clinic users need a way to choose; the server still decides. Single-clinic users need no header. |
+| 15 | **Tenant access is checked per request, not stored in the JWT** | Instant revocation; tokens stay free of clinic/role/personal data (tested). |
+| 16 | **Deactivate, never delete**: `PROTECT` on Membership -> User/Clinic | Preserves who-had-access-to-what history. Note: India DPDP erasure requests will need an anonymisation design before launch. |
+| 17 | **Enum values enforced by database CHECK constraints** (role, status, branding mode) | Bad data cannot enter through raw queries or `bulk_create`. Tested. |
+| 18 | Clinic **slug** auto-generated, immutable, reserved words skipped, unique in DB | Future white-label URLs must stay stable and must not collide with our routes. |
+| 19 | Clinic **logo field deferred to Sprint 7** | Needs Pillow plus the private object storage decision; branding is a Sprint 7 feature. `branding_mode` exists now. |
+| 20 | **Production rejects a `DJANGO_SECRET_KEY` shorter than 50 chars** | The key signs sessions and JWTs; a weak one is a silent vulnerability. Tested. |
 
 ## Deliberately not done yet
-Redis/Celery, CORS (needed when React arrives), Docker, object storage, audit log, email sending.
+Redis/Celery, CORS (needed when React arrives), Docker, object storage, audit log, email sending, invitations flow, clinic logo.

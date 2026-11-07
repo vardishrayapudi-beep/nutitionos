@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     # Local
     "apps.common",
     "apps.accounts",
+    "apps.clinics",
+    "apps.memberships",
 ]
 
 AUTH_USER_MODEL = "accounts.User"  # MUST be set before the first migration is ever run

@@ -8,6 +8,9 @@ from .base import *  # noqa: F401,F403
 DEBUG = False
 
 SECRET_KEY = env.get("DJANGO_SECRET_KEY", required=True)
+# The same key signs sessions and JWTs. Django's own generator produces 50 characters.
+if len(SECRET_KEY) < 50:
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be at least 50 characters in production.")
 ALLOWED_HOSTS = env.get_list("DJANGO_ALLOWED_HOSTS")
 if not ALLOWED_HOSTS:
     raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must be set in production.")
