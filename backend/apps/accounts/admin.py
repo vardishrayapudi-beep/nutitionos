@@ -10,14 +10,14 @@ class UserAdmin(DjangoUserAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
     ordering = ("email",)
-    list_display = ("email", "first_name", "last_name", "is_active", "is_staff", "created_at")
+    list_display = ("email", "first_name", "last_name", "is_active", "email_verified_at", "is_staff", "created_at")
     list_filter = ("is_active", "is_staff", "is_superuser")
     search_fields = ("email", "first_name", "last_name")
     readonly_fields = ("id", "last_login", "created_at", "updated_at")
 
     fieldsets = (
         (None, {"fields": ("id", "email", "password")}),
-        ("Personal info", {"fields": ("first_name", "last_name")}),
+        ("Personal info", {"fields": ("first_name", "last_name", "email_verified_at")}),
         ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         ("Important dates", {"fields": ("last_login", "created_at", "updated_at")}),
     )

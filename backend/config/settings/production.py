@@ -30,3 +30,11 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env.get_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
+
+# --- Email: production must use a real SMTP server and a real https frontend URL ---
+EMAIL_BACKEND = env.get("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = env.get("EMAIL_HOST", required=True)
+DEFAULT_FROM_EMAIL = env.get("DEFAULT_FROM_EMAIL", required=True)
+FRONTEND_BASE_URL = env.get("FRONTEND_BASE_URL", required=True).rstrip("/")
+if not FRONTEND_BASE_URL.startswith("https://"):
+    raise ImproperlyConfigured("FRONTEND_BASE_URL must start with https:// in production.")

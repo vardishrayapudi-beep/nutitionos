@@ -1,4 +1,5 @@
 import pytest
+from django.utils import timezone
 
 
 @pytest.fixture
@@ -13,6 +14,7 @@ def user(django_user_model, user_password):
         password=user_password,
         first_name="Asha",
         last_name="Rao",
+        email_verified_at=timezone.now(),
     )
 
 
@@ -64,6 +66,7 @@ def make_user(django_user_model, user_password):
 
     def _make(email=None, **kwargs):
         n = next(counter)
+        kwargs.setdefault("email_verified_at", timezone.now())
         return django_user_model.objects.create_user(
             email=email or f"person{n}@example.com", password=user_password, **kwargs
         )

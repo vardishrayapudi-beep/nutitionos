@@ -55,6 +55,9 @@ class User(TimeStampedUUIDModel, AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     # is_staff means "may open the Django admin" (platform operators only).
     is_staff = models.BooleanField(default=False)
+    # Set when the owner proves they control the address (verification link, accepted invitation
+    # or completed password reset). Clinic data is unreachable until this is set.
+    email_verified_at = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
 
@@ -70,6 +73,10 @@ class User(TimeStampedUUIDModel, AbstractBaseUser, PermissionsMixin):
     def save(self, *args, **kwargs):
         self.email = self.__class__.objects.normalize_email(self.email)
         super().save(*args, **kwargs)
+
+    @property
+    def is_email_verified(self) -> bool:
+        return self.email_verified_at is not None
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip()

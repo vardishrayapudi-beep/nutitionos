@@ -20,6 +20,11 @@ _CLINIC_META_KEY = "HTTP_X_CLINIC_ID"
 _CACHE_ATTR = "_tenant_membership"
 
 
+class EmailNotVerified(PermissionDenied):
+    default_detail = "Please verify your email address before using clinic features."
+    default_code = "email_not_verified"
+
+
 class NoActiveMembership(PermissionDenied):
     default_detail = "You do not have an active membership in any clinic."
     default_code = "no_active_membership"
@@ -56,6 +61,8 @@ def resolve_membership(request) -> Membership:
     user = request.user
     if not user or not user.is_authenticated:
         raise NotAuthenticated()
+    if not user.is_email_verified:
+        raise EmailNotVerified()
 
     memberships = list(active_memberships_for(user))
     if not memberships:

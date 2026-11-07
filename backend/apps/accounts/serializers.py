@@ -110,6 +110,7 @@ class MeMembershipSerializer(serializers.ModelSerializer):
 class MeSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     email = serializers.EmailField()
+    email_verified = serializers.BooleanField()
     first_name = serializers.CharField()
     last_name = serializers.CharField()
     memberships = MeMembershipSerializer(many=True)
@@ -121,3 +122,43 @@ class MeSerializer(serializers.Serializer):
 # --------------------------------------------------------------------------------------------
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField(write_only=True)
+
+
+# --------------------------------------------------------------------------------------------
+# Email verification, password reset / change
+# --------------------------------------------------------------------------------------------
+class VerifyEmailSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=2048)
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=254)
+
+
+def _check_new_password(value, user):
+    try:
+        validate_password(value, user=user)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(list(exc.messages))
+    return value
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField(max_length=128)
+    token = serializers.CharField(max_length=256)
+    new_password = serializers.CharField(max_length=128, trim_whitespace=False, write_only=True)
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    old_password = serializers.CharField(max_length=128, trim_whitespace=False, write_only=True)
+    new_password = serializers.CharField(max_length=128, trim_whitespace=False, write_only=True)
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if not user.check_password(attrs["old_password"]):
+            raise serializers.ValidationError({"old_password": ["Your current password is incorrect."]})
+        try:
+            _check_new_password(attrs["new_password"], user)
+        except serializers.ValidationError as exc:
+            raise serializers.ValidationError({"new_password": exc.detail})
+        return attrs

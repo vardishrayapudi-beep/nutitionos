@@ -34,8 +34,11 @@ def assert_clinic_isolation(*, owner_client, intruder_client, list_url, detail_u
 
     # ...and every direct access is "not found" (404, never 403 - existence is not revealed).
     assert intruder_client.get(detail_url).status_code == 404
-    assert intruder_client.patch(detail_url, update_payload or {}, format="json").status_code == 404
-    assert intruder_client.delete(detail_url).status_code == 404
+    # Writes: 404 (object invisible) or 405 (this resource has no such method) - never 200/204/403.
+    patch = intruder_client.patch(detail_url, update_payload or {}, format="json").status_code
+    delete = intruder_client.delete(detail_url).status_code
+    assert patch in (404, 405), f"LEAK: intruder PATCH answered {patch}"
+    assert delete in (404, 405), f"LEAK: intruder DELETE answered {delete}"
 
     # The failed attacks changed nothing.
     assert owner_client.get(detail_url).status_code == 200

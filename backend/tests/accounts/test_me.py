@@ -28,7 +28,8 @@ def test_returns_profile_and_the_memberships_of_the_caller(admin_a, clinic_a):
 
 def test_never_exposes_secrets_or_privilege_flags(admin_a):
     body = authenticated_client(admin_a).get(URL).json()
-    assert set(body) == {"id", "email", "first_name", "last_name", "memberships", "needs_clinic_selection"}
+    assert set(body) == {"id", "email", "email_verified", "first_name", "last_name", "memberships",
+                         "needs_clinic_selection"}
 
 
 def test_does_not_leak_other_clinics_or_their_members(admin_a, admin_b, doctor_a, clinic_b):

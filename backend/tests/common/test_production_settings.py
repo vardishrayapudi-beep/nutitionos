@@ -13,6 +13,9 @@ def load_production(monkeypatch, **env):
         "DJANGO_SECRET_KEY": STRONG_KEY,
         "DJANGO_ALLOWED_HOSTS": "nutritionos.example.com",
         "DB_PASSWORD": "not-empty",
+        "EMAIL_HOST": "smtp.example.com",
+        "DEFAULT_FROM_EMAIL": "Nutrition OS <no-reply@example.com>",
+        "FRONTEND_BASE_URL": "https://app.example.com",
     }
     base_env.update(env)
     for name, value in base_env.items():
@@ -55,3 +58,14 @@ def test_missing_allowed_hosts_is_refused(monkeypatch):
 def test_missing_database_password_is_refused(monkeypatch):
     with pytest.raises(ImproperlyConfigured):
         load_production(monkeypatch, DB_PASSWORD="")
+
+
+def test_frontend_url_must_be_https(monkeypatch):
+    with pytest.raises(ImproperlyConfigured):
+        load_production(monkeypatch, FRONTEND_BASE_URL="http://app.example.com")
+
+
+@pytest.mark.parametrize("missing", ["EMAIL_HOST", "DEFAULT_FROM_EMAIL", "FRONTEND_BASE_URL"])
+def test_email_configuration_is_required(monkeypatch, missing):
+    with pytest.raises(ImproperlyConfigured):
+        load_production(monkeypatch, **{missing: ""})
