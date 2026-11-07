@@ -59,3 +59,20 @@ def test_api_docs_exposed_in_development_only_by_default():
 
     assert base.API_DOCS_ENABLED is False
     assert settings.API_DOCS_ENABLED is True  # development settings in use for tests
+
+
+def test_production_password_hasher_is_pbkdf2():
+    from config.settings import base
+
+    assert base.PASSWORD_HASHERS == ["django.contrib.auth.hashers.PBKDF2PasswordHasher"]
+
+
+def test_client_ip_never_comes_from_a_spoofable_header_by_default():
+    """NUM_PROXIES=None would make DRF trust X-Forwarded-For and defeat all rate limits."""
+    assert settings.REST_FRAMEWORK["NUM_PROXIES"] == 0
+
+
+def test_auth_endpoints_have_dedicated_throttle_rates():
+    rates = settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+    for scope in ("auth_login", "auth_register", "auth_token_refresh", "auth_logout"):
+        assert scope in rates

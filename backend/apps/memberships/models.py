@@ -51,5 +51,13 @@ class Membership(TimeStampedUUIDModel):
     def is_active_member(self) -> bool:
         return self.status == self.Status.ACTIVE
 
+    @property
+    def grants_access(self) -> bool:
+        """True only for an ACTIVE membership in an ACTIVE clinic.
+
+        Must stay identical to ``tenancy.active_memberships_for`` (a test enforces this).
+        """
+        return self.is_active_member and self.clinic.is_active
+
     def __str__(self):
         return f"{self.user} @ {self.clinic} ({self.role}, {self.status})"

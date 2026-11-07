@@ -7,9 +7,9 @@ Doctors prescribe nutrition plans; patients struggle to follow them. Nutrition O
 doctor-approved prescription into weekly meal schedules, recipes, grocery lists and progress
 tracking. **The platform never diagnoses or prescribes - the doctor stays clinically responsible.**
 
-> **Status: Sprint 1, Day 2 complete** - backend foundation plus multi-tenancy core (Clinic,
-> Membership, tenant resolution, role permissions, cross-clinic test harness). No user-facing
-> clinic or patient endpoints yet - those start on Day 3.
+> **Status: Sprint 1, Day 3 complete** - backend foundation, multi-tenancy core, and the auth API
+> (register a clinic, log in, refresh, log out, "who am I"). Clinic management, doctors and patients
+> come next - see the roadmap.
 > See [docs/development-roadmap.md](docs/development-roadmap.md).
 
 > **Data safety:** use synthetic data only until a legal and technical assessment (including
@@ -50,7 +50,7 @@ python -c "from django.core.management.utils import get_random_secret_key as g; 
 
 # 6. Create tables, run tests, start the server
 python manage.py migrate
-python -m pytest          # expect: 86 passed
+python -m pytest          # expect: 152 passed
 python manage.py createsuperuser
 python manage.py runserver
 ```
@@ -59,6 +59,12 @@ Then open:
 - http://localhost:8000/api/v1/health/ - should show `{"status":"ok","database":"up"}`
 - http://localhost:8000/api/v1/docs/ - interactive API documentation (development only)
 - http://localhost:8000/admin/ - platform-operator admin (not for clinics)
+
+### Try the API
+With the server running, open http://localhost:8000/api/v1/docs/ (Swagger UI):
+1. Expand `POST /api/v1/auth/register-clinic/` -> **Try it out** -> fill the example body -> **Execute**.
+2. Copy the `access` token from the response, click **Authorize** (top right), paste it, then call
+   `GET /api/v1/auth/me/` to see your clinic and role.
 
 macOS/Linux: replace the activate line with `source .venv/bin/activate` and `py` with `python3`.
 

@@ -72,3 +72,22 @@ def test_clinic_exposes_its_memberships(make_user, make_membership, clinic_a, cl
     make_membership(make_user(), clinic_b)
     assert clinic_a.memberships.count() == 2
     assert clinic_b.memberships.count() == 1
+
+
+@pytest.mark.parametrize("status", list(Membership.Status))
+@pytest.mark.parametrize("clinic_active", [True, False])
+def test_grants_access_matches_the_query_that_enforces_access(
+    make_user, make_membership, make_clinic, status, clinic_active
+):
+    """Two definitions of 'has access' must never drift apart."""
+    from apps.memberships.tenancy import active_memberships_for
+
+    person = make_user()
+    clinic = make_clinic()
+    membership = make_membership(person, clinic, status=status)
+    clinic.is_active = clinic_active
+    clinic.save()
+
+    fresh = Membership.objects.select_related("clinic").get(pk=membership.pk)
+    assert fresh.grants_access == active_memberships_for(person).filter(pk=fresh.pk).exists()
+    assert fresh.grants_access == (status == Membership.Status.ACTIVE and clinic_active)

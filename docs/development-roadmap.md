@@ -6,7 +6,7 @@ Models come before endpoints: `register-clinic` needs Clinic + Membership to exi
 
 - [x] **Day 1** - Project init, settings split, PostgreSQL, custom User, first migration, health check, secure API defaults, tests, docs
 - [x] **Day 2** - `Clinic` + `Membership` models (roles, status, constraints), tenant-scoping helpers, cross-clinic test harness
-- [ ] **Day 3** - Auth endpoints: `register-clinic`, `token`, `token/refresh`, `me`
+- [x] **Day 3** - Auth endpoints: `register-clinic`, `token`, `token/refresh`, `me`
 - [ ] **Day 4** - Clinic endpoints: `clinics/me` (GET/PATCH), `clinics/members`, `clinics/invitations`
 - [ ] **Day 5** - Doctor profiles
 - [ ] **Day 6** - Patients (clinic-scoped `patient_code`, consent status, assign-doctor)
@@ -82,6 +82,32 @@ requirements*.txt, .env.example, manage.py), `docs/*.md`, `README.md`, `.gitigno
 
 **Next tasks:** Sprint 1, Day 3 - auth endpoints (`register-clinic`, `token`, `token/refresh`, `me`).
 
+## Progress record - Session 3 (Sprint 1, Day 3)
+
+**Completed**
+1. `POST /auth/register-clinic/` - atomic clinic + admin + membership creation with slug-race retry (`apps/clinics/services.py`).
+2. `POST /auth/token/`, `POST /auth/token/refresh/` (rotation + blacklist), `POST /auth/logout/` (added), `GET /auth/me/`.
+3. Per-endpoint rate limits; client-IP handling made spoof-proof (`NUM_PROXIES`); explicit PBKDF2 hasher setting.
+4. `Membership.grants_access` single definition of "has access", pinned to the enforcing query by a test.
+5. Test suite sped up ~10x with a test-only hasher; docs (API contract with examples, decisions 21-28) updated.
+
+**Files created:** `apps/accounts/{serializers,views,urls}.py`, `apps/clinics/services.py`, `tests/accounts/{test_register_clinic,test_token_endpoints,test_me}.py`, `tests/clinics/test_register_service.py`.
+**Files modified:** `config/settings/base.py`, `config/urls.py`, `apps/memberships/models.py`, `tests/conftest.py`, `tests/accounts/test_user_model.py`, `tests/common/test_api_defaults.py`, `tests/memberships/test_membership_model.py`, `.env.example`, README and docs. **No new migrations** (no schema change).
+
+**Commands executed (Linux sandbox):** `check`, `makemigrations --check`, `spectacular --validate`, `pytest` (two orderings), `check --deploy` (production settings), three deliberate-sabotage runs, and a live `runserver` + curl walk-through of register -> me -> refresh -> replay -> logout -> login.
+
+**Results**
+- `pytest`: **152 passed** (up from 86).
+- Sabotage checks, all caught: trusting `X-Forwarded-For` (2 tests fail - confirming the bypass risk was real), disabling blacklist-after-rotation (2 fail), removing registration's transaction (3 fail). All restored; suite green.
+- Live journey: register 201 -> me 200 -> refresh rotates -> replayed old refresh 401 -> logout 204 -> refresh after logout 401 -> login with upper-case email 200. Server log: no errors.
+- `makemigrations --check`: no changes. OpenAPI validates with no warnings (6 paths documented). `check --deploy`: only the intentional `security.W021`.
+
+**Mistakes caught:** a leftover junk expression in one of my own tests (`... if False else ...`) - harmless but removed before finishing.
+
+**NOT verified:** nothing run on the founder's Windows machine; the Swagger "Authorize" flow was not exercised in a browser; no email is sent anywhere yet (no verification, no password reset).
+
+**Next tasks:** Sprint 1, Day 4 - clinic endpoints (`clinics/me` GET/PATCH, `clinics/members`, `clinics/invitations`), including the "never remove the last active admin" rule.
+
 ## Known issues / technical debt
 1. Unknown `/api/...` URLs return Django's default 404 page (HTML), not the standard JSON error envelope.
 2. Throttle counters use the default per-process cache; production needs a shared cache (Redis) for limits to be reliable.
@@ -93,3 +119,8 @@ requirements*.txt, .env.example, manage.py), `docs/*.md`, `README.md`, `.gitigno
 8. Platform operators (`is_staff`) can see every clinic's data through the Django admin by design; audit logging of operator actions is planned for Day 7. Keep the number of operator accounts minimal.
 9. `Clinic.phone` is not format-validated yet; `Clinic.logo` deferred (decision 19).
 10. `PROTECT` foreign keys mean erasure requests under India's DPDP Act need a designed anonymisation process before real patient data is held.
+11. **No email verification**: anyone can register any email address as a clinic admin. Must be solved before a pilot (verify email; verify doctors' registration numbers).
+12. **Registration reveals whether an email is already registered** (login does not). Mitigated only by the 5/hour limit; revisit together with email verification.
+13. **No password reset or change-password endpoints yet** (they need email sending). Until then a forgotten password can only be reset by a platform operator.
+14. **Logout is not instant for access tokens**: an access token stays valid up to 15 minutes. Clinic access is unaffected (membership is re-checked per request), but `/auth/me/` would still answer.
+15. **Rate limiting is per client address only**; a distributed attack on one account is not stopped. Consider per-account lockout/alerts later. `NUM_PROXIES` must be set correctly at deployment.

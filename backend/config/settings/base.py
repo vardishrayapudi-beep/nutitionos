@@ -94,6 +94,9 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# One strong hasher, listed explicitly (a new project has no legacy hashes to keep verifying).
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.PBKDF2PasswordHasher"]
+
 # JWTs carry ONLY the user id - never medical or personal details.
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
@@ -123,7 +126,19 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
-    "DEFAULT_THROTTLE_RATES": {"anon": "60/min", "user": "300/min"},
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        "user": "300/min",
+        # Stricter limits for credential-related endpoints (see apps/accounts/views.py)
+        "auth_login": "10/min",
+        "auth_register": "5/hour",
+        "auth_token_refresh": "30/min",
+        "auth_logout": "30/min",
+    },
+    # How many trusted reverse proxies sit in front of Django. 0 = trust only the TCP peer address.
+    # NEVER leave this unset: DRF would then trust a client-supplied X-Forwarded-For header, and
+    # anyone could dodge every rate limit by sending a different fake value on each request.
+    "NUM_PROXIES": env.get_int("NUM_PROXIES", 0),
     "EXCEPTION_HANDLER": "apps.common.exceptions.api_exception_handler",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
 }

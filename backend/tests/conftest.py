@@ -113,3 +113,10 @@ def admin_b(make_user, make_membership, clinic_b):
     person = make_user("admin.b@example.com")
     make_membership(person, clinic_b, Membership.Role.CLINIC_ADMIN)
     return person
+
+
+@pytest.fixture(autouse=True)
+def _fast_password_hasher(settings):
+    """Real PBKDF2 takes ~0.3s per password; tests create hundreds. The production hasher is
+    asserted separately in tests/common/test_api_defaults.py."""
+    settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

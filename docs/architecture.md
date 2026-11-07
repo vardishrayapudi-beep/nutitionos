@@ -15,8 +15,8 @@ Apps are created progressively as dependencies appear (see roadmap). Currently:
 | App | Purpose |
 |---|---|
 | `apps.common` | Shared abstract model (`TimeStampedUUIDModel`), API error envelope, health check |
-| `apps.accounts` | Custom `User` (email login). Holds no clinic/role data. |
-| `apps.clinics` | `Clinic` - the tenant (one paying customer). |
+| `apps.accounts` | Custom `User` (email login, no clinic/role data) and the `/auth/` endpoints: register-clinic, token, refresh, logout, me. |
+| `apps.clinics` | `Clinic` - the tenant (one paying customer) and `services.py` (multi-table operations such as `register_clinic`). |
 | `apps.memberships` | `Membership` (user + clinic + role + status) and ALL tenant plumbing: resolver, permissions, queryset mixin, scoped related field. |
 
 ## Multi-tenancy (non-negotiable) - implemented in Sprint 1, Day 2
@@ -89,7 +89,20 @@ assert_clinic_isolation(owner_client=..., intruder_client=..., list_url=..., det
 | 17 | **Enum values enforced by database CHECK constraints** (role, status, branding mode) | Bad data cannot enter through raw queries or `bulk_create`. Tested. |
 | 18 | Clinic **slug** auto-generated, immutable, reserved words skipped, unique in DB | Future white-label URLs must stay stable and must not collide with our routes. |
 | 19 | Clinic **logo field deferred to Sprint 7** | Needs Pillow plus the private object storage decision; branding is a Sprint 7 feature. `branding_mode` exists now. |
+| 21 | **Registration is one atomic service** (`register_clinic`): user + clinic + active admin membership in a single transaction | A crash can never leave an orphan user or clinic. Tested by simulating a failure mid-way. |
+| 22 | **Slug races are retried** (up to 5 attempts, each in its own savepoint), then `503 service_busy` | Slugs are check-then-insert; the DB UNIQUE constraint is the referee, the retry hides the race from the user. |
+| 23 | **New clinic admins are ordinary, unprivileged users**; extra payload keys are ignored | Their only power is an active `clinic_admin` membership in their own new clinic. No mass-assignment of `is_staff`/role. Tested. |
+| 24 | **Per-endpoint throttle scopes** (login 10/min, register 5/hour, refresh/logout 30/min) and **`NUM_PROXIES = 0` by default** | DRF's default trusts a client-supplied `X-Forwarded-For`, which lets anyone bypass every limit. Proven by deliberately reverting it: the test fails. Must be set correctly at deployment. |
+| 25 | **Login errors are identical for unknown email and wrong password** | No account enumeration at login. |
+| 26 | **`logout` endpoint added** (not in the original list); idempotent; refresh rotation + blacklist; refresh refuses deactivated users | Rotating refresh tokens need an explicit way to revoke a session. |
+| 27 | **`/auth/me/` never resolves a clinic**; returns all of the caller's own memberships; `needs_clinic_selection` derived from `Membership.grants_access` | Must work for users with no clinic; a test pins `grants_access` to the enforcing query so the two rules cannot drift. |
+| 28 | **Tests use a fast password hasher**; production's PBKDF2 setting is asserted by its own test | Suite runs in ~2 s instead of ~20 s without weakening production. |
 | 20 | **Production rejects a `DJANGO_SECRET_KEY` shorter than 50 chars** | The key signs sessions and JWTs; a weak one is a silent vulnerability. Tested. |
+
+### Layering convention
+Views validate input and shape output; **business rules that touch several tables live in
+`services.py`** inside the owning app (e.g. `apps/clinics/services.py::register_clinic`), so they are
+testable without HTTP and reusable by future callers (admin tools, Celery tasks).
 
 ## Deliberately not done yet
 Redis/Celery, CORS (needed when React arrives), Docker, object storage, audit log, email sending, invitations flow, clinic logo.

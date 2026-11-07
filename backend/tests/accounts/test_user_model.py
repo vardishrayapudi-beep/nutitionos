@@ -23,7 +23,7 @@ def test_email_is_normalised_to_lowercase_and_trimmed(django_user_model):
 
 def test_password_is_hashed_not_stored_in_plain_text(user, user_password):
     assert user.password != user_password
-    assert user.password.startswith("pbkdf2_")
+    assert user_password not in user.password
     assert user.check_password(user_password)
 
 
